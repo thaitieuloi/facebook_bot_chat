@@ -32,6 +32,26 @@ app.set('view engine', 'ejs');
 app.use(bodyParser.json({ verify: verifyRequestSignature }));
 app.use(express.static('public'));
 
+
+/*
+ * BEGIN - mySQL
+ */
+
+var mysql = require('mysql');
+var pool  = mysql.createPool({
+  host     : 'localhost',
+  user     : 'root',
+  password : '',
+  database : 'bot_facebook'
+});
+
+
+
+/*
+ * END - mySQL
+ */
+ 
+
 /*
  * Be sure to setup your config values before running this code. You can 
  * set them using environment variables or modifying the config file in /config.
@@ -557,12 +577,110 @@ function sendFileMessage(recipientId) {
   callSendAPI(messageData);
 }
 
+function getRandomInt(max) {
+  return Math.floor(Math.random() * Math.floor(max));
+}
+
+app.get('/question/:question', function(req, res) {
+	
+	try {
+  
+		var question = req.params.question;
+		
+		//throw Error('error in code');
+		
+		
+		var sql = 'select * from tbl_questions_answers  join tbl_questions   on question_id = tbl_questions.id '
+			sql +=											'join tbl_answers  	 on answer_id = tbl_answers.id '
+			sql +=				' where 	question_name like "' + question + '"';
+		console.log('sql: ', sql);
+		
+		var output = "" ;
+		var personList = [];
+		
+		pool.getConnection(function(err, connection) {
+		  // Use the connection
+		  connection.query(sql, function (error, rows, fields) {
+			try 
+			{
+				// And done with the connection.
+				connection.release();
+
+				// Don't use the connection here, it has been returned to the pool.
+				
+				// connected! (unless `err` is set)
+				if (error) {
+					res.status(500).json({"status_code": 500,"status_message": "internal server error"});
+				} else 
+				{
+					// Loop check on each row
+					for (var i = 0; i < rows.length; i++) 
+					{
+
+						// Create an object to save current row's data
+						var person = 
+						{
+							'question_name' :rows[i].question_name,
+							'answer_name'	:rows[i].answer_name,
+							'id'			:rows[i].question_id
+						}
+						// Add object into array
+						personList.push(person);
+					}
+
+					// Render index.pug page using array 
+					//res.render('index', {"personList": personList});
+					var number_index = getRandomInt(rows.length);
+					res.send(personList[number_index].answer_name);   
+				}
+				
+				
+			 
+				console.log('Result answer : ' + JSON.stringify(rows, null, ' ' ));
+				
+				output = JSON.stringify(rows, null, ' ' );  
+				//res.send(output);   
+			
+			} 
+			catch (e) 
+			{
+				connection.end();
+
+				res.send("message :" + e.message);   
+				//res.send(e.fileName);   
+				//res.send(e.lineNumber);   
+				//res.send(e.stack);   
+			  
+
+			}
+			
+			
+		  });
+		});
+	} catch (e) {
+
+		res.send(e.message);   
+	  //log(  );
+	  //log( e.fileName );
+	  //log( e.lineNumber );
+	  //log( e.stack );
+
+	}
+	
+	
+	
+	
+	
+});
+
 /*
  * Send a text message using the Send API.
  *
  */
 function sendTextMessage(recipientId, messageText) {
 	console.log("[sendTextMessage] - BEGIN");
+	
+	// find message from database
 	
   var messageData = {
 	recipient: {
